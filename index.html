@@ -75,15 +75,15 @@
         <div class="brand">Pocket</div>
         <div style="display: flex; gap: 10px; align-items: center;">
           <input type="month" id="month-filter" class="month-input">
-          <button onclick="logout()" style="background:none; border:none; font-size:1.2rem; cursor:pointer;">🚪</button>
+          <button onclick="logout()" class="btn-logout-text">LOGOUT</button>
         </div>
       </header>
       <div class="card balance-card">
         <span class="label">ยอดคงเหลือรวม</span>
         <h2 id="total-net">฿0.00</h2>
         <div class="stats-row">
-          <div class="stat"><span>รายรับ</span><strong class="in" id="total-in">฿0</strong></div>
-          <div class="stat"><span>รายจ่าย</span><strong class="out" id="total-out">฿0</strong></div>
+          <div class="stat"><span>รายรับรวม</span><strong class="in" id="total-in">฿0</strong></div>
+          <div class="stat"><span>รายจ่ายรวม</span><strong class="out" id="total-out">฿0</strong></div>
         </div>
       </div>
       <section class="list-section">
@@ -93,6 +93,21 @@
         </div>
         <div id="transaction-list"></div>
       </section>
+    </div>
+
+    <div id="view-dashboard" class="view hidden">
+      <header class="header">
+        <h3>📊 สรุปรายงาน</h3>
+      </header>
+      <div class="card" style="margin-top:0">
+        <div id="dashboard-cat-summary">
+        </div>
+      </div>
+      <div class="card">
+        <p style="font-size: 0.95rem; font-weight: 700; margin-bottom: 20px; color: var(--primary);">💰
+          สถานะเงินแต่ละบัญชี</p>
+        <div id="dashboard-acc-summary"></div>
+      </div>
     </div>
 
     <div id="view-accounts" class="view hidden">
@@ -119,6 +134,7 @@
 
     <nav class="nav-bar">
       <button onclick="switchView('home')" id="nav-home" class="active">🏠 <span>หน้าแรก</span></button>
+      <button onclick="switchView('dashboard')" id="nav-dash">📊 <span>สรุปผล</span></button>
       <button onclick="switchView('accounts')" id="nav-accounts">🏦 <span>บัญชี</span></button>
       <button onclick="switchView('categories')" id="nav-cats">🏷️ <span>หมวดหมู่</span></button>
     </nav>
