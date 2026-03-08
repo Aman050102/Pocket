@@ -1,85 +1,132 @@
-// 1. กำหนด URL ของ Cloudflare Worker API
-const API_URL = "https://my-finance-api.aman02012548.workers.dev/api";
+const API_URL = "https://my-finance-api.aman02012548.workers.dev";
 
-// เริ่มต้นสถานะข้อมูล (หมวดหมู่และบัญชียังใช้ localStorage เพื่อความสะดวกในการตั้งค่าส่วนตัว)
 let state = {
+    token: localStorage.getItem('pocket_token') || null,
     transactions: [],
-    categories: JSON.parse(localStorage.getItem('fpro_cat')) || ['อาหาร', 'เดินทาง', 'จิปาถะ', 'เงินเดือน'],
-    accounts: JSON.parse(localStorage.getItem('fpro_acc')) || ['เงินสด', 'ธ.กรุงไทย', 'ธ.ออมสิน'],
+    categories: [],
+    accounts: [],
     currentMonth: new Date().toISOString().substring(0, 7)
 };
 
-// 2. การจัดการหน้าจอ (Navigation)
+// --- Auth UI ---
+function toggleAuth(view) {
+    document.getElementById('login-card').classList.add('hidden');
+    document.getElementById('register-card').classList.add('hidden');
+    document.getElementById('forgot-card').classList.add('hidden');
+    document.getElementById(`${view}-card`).classList.remove('hidden');
+}
+
+function togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    input.type = input.type === "password" ? "text" : "password";
+    btn.innerText = input.type === "password" ? "SHOW" : "HIDE";
+}
+
+// --- API Auth ---
+document.getElementById('login-form').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+        const res = await fetch(`${API_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: e.target[0].value, password: e.target[1].value })
+        });
+        if (!res.ok) throw new Error("Login Failed");
+        const data = await res.json();
+        localStorage.setItem('pocket_token', data.token);
+        location.reload();
+    } catch (err) { alert("อีเมลหรือรหัสผ่านไม่ถูกต้อง"); }
+};
+
+document.getElementById('register-form').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+        const res = await fetch(`${API_URL}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: e.target[0].value, password: e.target[1].value })
+        });
+        if (res.ok) { alert("สมัครสำเร็จ! กรุณา Login"); toggleAuth('login'); }
+        else alert("สมัครไม่สำเร็จ: " + await res.text());
+    } catch (err) { alert("Error: " + err.message); }
+};
+
+function logout() { localStorage.removeItem('pocket_token'); location.reload(); }
+
+function checkAuth() {
+    if (state.token) {
+        document.getElementById('auth-container').classList.add('hidden');
+        document.getElementById('main-app').classList.remove('hidden');
+        fetchAppData();
+    }
+}
+
+// --- Sync Data ---
+async function fetchAppData() {
+    if (!state.token) return;
+    try {
+        const headers = { 'Authorization': `Bearer ${state.token}` };
+        const [transRes, settingsRes] = await Promise.all([
+            fetch(`${API_URL}/api/transactions?month=${state.currentMonth}`, { headers }),
+            fetch(`${API_URL}/api/settings`, { headers })
+        ]);
+
+        if (transRes.status === 401) return logout();
+
+        state.transactions = await transRes.json();
+        const settings = await settingsRes.json();
+        state.categories = settings.categories || [];
+        state.accounts = settings.accounts || [];
+
+        render();
+    } catch (err) { console.error("Load Error", err); }
+}
+
+async function addSetting(type) {
+    const inputId = type === 'cat' ? 'new-cat-input' : 'new-acc-input';
+    const name = document.getElementById(inputId).value.trim();
+    if (!name) return;
+    try {
+        const res = await fetch(`${API_URL}/api/settings/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.token}`
+            },
+            body: JSON.stringify({ type, name })
+        });
+        if (res.ok) {
+            document.getElementById(inputId).value = '';
+            await fetchAppData();
+        } else {
+            const errData = await res.json();
+            alert("Error: " + errData.error);
+        }
+    } catch (err) { alert("เพิ่มไม่สำเร็จ: " + err.message); }
+}
+
+async function deleteSetting(type, id) {
+    if (!confirm('ลบรายการนี้?')) return;
+    try {
+        const res = await fetch(`${API_URL}/api/settings/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.token}`
+            },
+            body: JSON.stringify({ type, id })
+        });
+        if (res.ok) await fetchAppData();
+    } catch (err) { alert("ลบไม่สำเร็จ"); }
+}
+
+// --- Logic ---
 function switchView(viewName) {
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     document.querySelectorAll('.nav-bar button').forEach(b => b.classList.remove('active'));
-
     document.getElementById(`view-${viewName}`).classList.remove('hidden');
-    const navId = `nav-${viewName === 'home' ? 'home' : (viewName === 'accounts' ? 'accounts' : 'cats')}`;
+    let navId = viewName === 'home' ? 'nav-home' : (viewName === 'accounts' ? 'nav-accounts' : 'nav-cats');
     document.getElementById(navId).classList.add('active');
-    render();
-}
-
-// 3. ดึงข้อมูลจาก Cloudflare D1
-async function fetchTransactions() {
-    try {
-        const res = await fetch(`${API_URL}/transactions?month=${state.currentMonth}`);
-        if (!res.ok) throw new Error("Network error");
-        state.transactions = await res.json();
-        render();
-    } catch (err) {
-        console.error("Fetch error:", err);
-    }
-}
-
-// 4. จัดการหมวดหมู่ (Categories)
-function addCategory() {
-    const input = document.getElementById('new-cat-input');
-    const val = input.value.trim();
-    if (val && !state.categories.includes(val)) {
-        state.categories.push(val);
-        saveSettings();
-        input.value = '';
-        render();
-    }
-}
-
-function deleteCategory(index) {
-    if (confirm('ยืนยันการลบหมวดหมู่?')) {
-        state.categories.splice(index, 1);
-        saveSettings();
-        render();
-    }
-}
-
-// 5. จัดการบัญชี (Accounts)
-function addAccount() {
-    const input = document.getElementById('new-acc-input');
-    const val = input.value.trim();
-    if (val && !state.accounts.includes(val)) {
-        state.accounts.push(val);
-        saveSettings();
-        input.value = '';
-        render();
-    }
-}
-
-function deleteAccount(index) {
-    if (confirm('การลบบัญชีจะไม่ลบข้อมูลเก่าที่เคยบันทึกไว้ ยืนยันไหม?')) {
-        state.accounts.splice(index, 1);
-        saveSettings();
-        render();
-    }
-}
-
-// 6. บันทึกรายการ (Transactions)
-function openEntryModal() {
-    document.getElementById('entry-modal').style.display = 'flex';
-    renderDropdowns();
-}
-
-function closeEntryModal() {
-    document.getElementById('entry-modal').style.display = 'none';
 }
 
 document.getElementById('entry-form').onsubmit = async (e) => {
@@ -93,94 +140,79 @@ document.getElementById('entry-form').onsubmit = async (e) => {
         month: state.currentMonth,
         date: new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
     };
-
     try {
-        const res = await fetch(`${API_URL}/transactions`, {
+        const res = await fetch(`${API_URL}/api/transactions`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${state.token}`
+            },
             body: JSON.stringify(entry)
         });
         if (res.ok) {
             closeEntryModal();
-            e.target.reset();
-            fetchTransactions(); // โหลดข้อมูลใหม่จาก DB
+            fetchAppData();
         }
-    } catch (err) {
-        alert("ไม่สามารถบันทึกข้อมูลได้");
-    }
+    } catch (err) { alert("บันทึกไม่สำเร็จ"); }
 };
 
 async function deleteTransaction(id) {
-    if (confirm('ลบรายการนี้ใช่หรือไม่?')) {
+    if (confirm('ลบรายการนี้?')) {
         try {
-            await fetch(`${API_URL}/transactions/${id}`, { method: 'DELETE' });
-            fetchTransactions();
-        } catch (err) {
-            alert("ไม่สามารถลบข้อมูลได้");
-        }
+            const res = await fetch(`${API_URL}/api/transactions/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${state.token}` }
+            });
+            if (res.ok) fetchAppData();
+        } catch (err) { alert("ลบไม่สำเร็จ"); }
     }
 }
 
-// 7. การประมวลผลและการแสดงผล
-function saveSettings() {
-    localStorage.setItem('fpro_cat', JSON.stringify(state.categories));
-    localStorage.setItem('fpro_acc', JSON.stringify(state.accounts));
-}
-
-function renderDropdowns() {
-    const catSel = document.getElementById('cat-select');
-    const accSel = document.getElementById('acc-select');
-    catSel.innerHTML = state.categories.map(c => `<option value="${c}">${c}</option>`).join('');
-    accSel.innerHTML = state.accounts.map(a => `<option value="${a}">${a}</option>`).join('');
-}
-
 function render() {
-    // เรนเดอร์หน้าจัดการหมวดหมู่และบัญชี
-    document.getElementById('category-list-render').innerHTML = state.categories.map((c, i) => `
-        <div class="cat-pill"><span>${c}</span><button onclick="deleteCategory(${i})" class="btn-del">ลบ</button></div>
-    `).join('');
+    document.getElementById('category-list-render').innerHTML = state.categories.map(c => `
+        <div class="cat-pill"><span>${c.name}</span><button onclick="deleteSetting('cat', ${c.id})" class="btn-del">ลบ</button></div>`).join('');
 
-    document.getElementById('account-list-render').innerHTML = state.accounts.map((a, i) => `
-        <div class="cat-pill"><span>🏦 ${a}</span><button onclick="deleteAccount(${i})" class="btn-del">ลบ</button></div>
-    `).join('');
+    document.getElementById('account-list-render').innerHTML = state.accounts.map(a => `
+        <div class="cat-pill"><span>🏦 ${a.name}</span><button onclick="deleteSetting('acc', ${a.id})" class="btn-del">ลบ</button></div>`).join('');
 
-    // แสดงรายการจาก State (ที่ได้จาก API)
     const listDiv = document.getElementById('transaction-list');
-    listDiv.innerHTML = '';
+    listDiv.innerHTML = ''; let sin = 0, sout = 0;
 
-    let sin = 0, sout = 0;
     state.transactions.forEach(t => {
         if (t.type === 'in') sin += t.amt; else sout += t.amt;
         listDiv.innerHTML += `
             <div class="item-row">
-                <div class="item-info">
-                    <b>${t.desc}</b>
-                    <small>${t.date} • ${t.cat} | <span class="acc-tag">${t.acc}</span></small>
-                </div>
+                <div class="item-info"><b>${t.desc}</b><small>${t.date} • ${t.cat} | <span class="acc-tag">${t.acc}</span></small></div>
                 <div style="text-align:right">
-                    <span class="${t.type === 'in' ? 'in' : 'out'}" style="font-weight:600">
-                        ${t.type === 'in' ? '+' : '-'}${t.amt.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                    </span>
+                    <span class="${t.type === 'in' ? 'in' : 'out'}" style="font-weight:600">${t.type === 'in' ? '+' : '-'}${t.amt.toLocaleString()}</span>
                     <button onclick="deleteTransaction(${t.id})" class="btn-del" style="display:block; margin-left:auto; margin-top:4px">ลบ</button>
                 </div>
-            </div>
-        `;
+            </div>`;
     });
 
-    // อัปเดตตัวเลขสรุป
     document.getElementById('total-in').innerText = `฿${sin.toLocaleString()}`;
     document.getElementById('total-out').innerText = `฿${sout.toLocaleString()}`;
-    document.getElementById('total-net').innerText = `฿${(sin - sout).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    document.getElementById('total-net').innerText = `฿${(sin - sout).toLocaleString()}`;
 }
 
-// 8. Event Listeners
-document.getElementById('month-filter').onchange = (e) => {
-    state.currentMonth = e.target.value;
-    fetchTransactions();
-};
+function openEntryModal() {
+    const catSelect = document.getElementById('cat-select');
+    const accSelect = document.getElementById('acc-select');
 
-window.onclick = (e) => { if(e.target == document.getElementById('entry-modal')) closeEntryModal(); };
+    catSelect.innerHTML = state.categories.length
+        ? state.categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('')
+        : '<option disabled>กรุณาเพิ่มหมวดหมู่ก่อน</option>';
 
-// เริ่มต้นแอป
+    accSelect.innerHTML = state.accounts.length
+        ? state.accounts.map(a => `<option value="${a.name}">${a.name}</option>`).join('')
+        : '<option disabled>กรุณาเพิ่มบัญชีก่อน</option>';
+
+    document.getElementById('entry-modal').style.display = 'flex';
+}
+
+function closeEntryModal() { document.getElementById('entry-modal').style.display = 'none'; }
+
+document.getElementById('month-filter').onchange = (e) => { state.currentMonth = e.target.value; fetchAppData(); };
 document.getElementById('month-filter').value = state.currentMonth;
-fetchTransactions();
+
+checkAuth();

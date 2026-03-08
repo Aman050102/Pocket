@@ -10,13 +10,74 @@
 </head>
 
 <body>
-  <div class="app-container">
+  <div id="auth-container" class="auth-overlay">
+    <div class="auth-card" id="login-card">
+      <div class="auth-icon-circle">🔒</div>
+      <h2>Login</h2>
+      <form id="login-form">
+        <div class="input-field">
+          <label>EMAIL</label>
+          <input type="email" id="login-email" placeholder="name@gmail.com" required>
+        </div>
+        <div class="input-field">
+          <label>PASSWORD</label>
+          <div class="password-wrapper">
+            <input type="password" id="login-pw" placeholder="••••••••" required>
+            <button type="button" class="toggle-password-text"
+              onclick="togglePasswordVisibility('login-pw', this)">SHOW</button>
+          </div>
+        </div>
+        <button type="submit" class="btn-auth-primary">Sign In</button>
+      </form>
+      <p class="auth-switch">Don't have an account? <a href="#" onclick="toggleAuth('register')">Register</a></p>
+      <p class="auth-switch"><a href="#" onclick="toggleAuth('forgot')">Forgot Password?</a></p>
+    </div>
+
+    <div class="auth-card hidden" id="register-card">
+      <div class="auth-icon-circle">📝</div>
+      <h2>Register</h2>
+      <form id="register-form">
+        <div class="input-field">
+          <label>EMAIL</label>
+          <input type="email" id="reg-email" placeholder="name@gmail.com" required>
+        </div>
+        <div class="input-field">
+          <label>PASSWORD</label>
+          <div class="password-wrapper">
+            <input type="password" id="reg-pw" placeholder="••••••••" required>
+            <button type="button" class="toggle-password-text"
+              onclick="togglePasswordVisibility('reg-pw', this)">SHOW</button>
+          </div>
+        </div>
+        <button type="submit" class="btn-auth-primary">Create Account</button>
+      </form>
+      <p class="auth-switch">Already have an account? <a href="#" onclick="toggleAuth('login')">Login</a></p>
+    </div>
+
+    <div class="auth-card hidden" id="forgot-card">
+      <div class="auth-icon-circle">🔑</div>
+      <h2>Reset Password</h2>
+      <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 20px;">กรุณากรอกอีเมลเพื่อรับรหัสรีเซ็ต</p>
+      <form id="forgot-form">
+        <div class="input-field">
+          <label>EMAIL</label>
+          <input type="email" id="forgot-email" placeholder="name@university.ac.th" required>
+        </div>
+        <button type="submit" class="btn-auth-primary">Send Reset Link</button>
+      </form>
+      <p class="auth-switch"><a href="#" onclick="toggleAuth('login')">Back to Login</a></p>
+    </div>
+  </div>
+
+  <div class="app-container hidden" id="main-app">
     <div id="view-home" class="view">
       <header class="header">
         <div class="brand">Pocket</div>
-        <input type="month" id="month-filter" class="month-input">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="month" id="month-filter" class="month-input">
+          <button onclick="logout()" style="background:none; border:none; font-size:1.2rem; cursor:pointer;">🚪</button>
+        </div>
       </header>
-
       <div class="card balance-card">
         <span class="label">ยอดคงเหลือรวม</span>
         <h2 id="total-net">฿0.00</h2>
@@ -25,7 +86,6 @@
           <div class="stat"><span>รายจ่าย</span><strong class="out" id="total-out">฿0</strong></div>
         </div>
       </div>
-
       <section class="list-section">
         <div class="section-title">
           <span>รายการล่าสุด</span>
@@ -41,7 +101,7 @@
       </header>
       <div class="input-group">
         <input type="text" id="new-acc-input" placeholder="เช่น เงินสด, กสิกร, ออมสิน">
-        <button onclick="addAccount()" class="btn-primary">เพิ่ม</button>
+        <button onclick="addSetting('acc')" class="btn-primary">เพิ่ม</button>
       </div>
       <div id="account-list-render" class="category-grid"></div>
     </div>
@@ -52,7 +112,7 @@
       </header>
       <div class="input-group">
         <input type="text" id="new-cat-input" placeholder="เช่น อาหาร, เดินทาง, ช้อปปิ้ง">
-        <button onclick="addCategory()" class="btn-primary">เพิ่ม</button>
+        <button onclick="addSetting('cat')" class="btn-primary">เพิ่ม</button>
       </div>
       <div id="category-list-render" class="category-grid"></div>
     </div>
